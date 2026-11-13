@@ -2,21 +2,31 @@
   "name": "@local/dsh-subagent-executor-model",
   "version": "1.0.0",
   "private": true,
-  "description": "Host plugin: give delegated execution subagents a default provider/model/reasoning effort without copying an agent preset.",
+  "description": "Host plugin: give delegated execution subagents a default model route, report their token usage, and show the subagent token total in the Session header.",
   "type": "module",
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
+    "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-session"
+      ]
     }
   },
   "files": [
     "index.js",
+    "client.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",

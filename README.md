@@ -61,6 +61,18 @@
 
 用法：直接问「统计各子代理的 token 用量」即可；输出是 Markdown 表格，最后一行是整棵树的合计。
 
+## 标题行的 token 用量条（Web UI）
+
+本 bundle 还带一个客户端模块（`client.js`），在**会话标题行「N 个子智能体」右侧**显示一个紧凑的 token 合计条：
+
+- 位置：`conversation.session.header.actions` slot，`order: 15`（子智能体计数是 10，后台任务 20），所以紧跟在子智能体计数右边；
+- 显示：`Σ 12.4k` —— 当前会话**所有本地子代理**的累计 token 合计（未缓存输入 + 缓存读 + 缓存写 + 输出）；
+- 悬停提示：分桶明细、已统计数量、口径说明；
+- 数据源：每个子会话的 `tokenUsage` 投影（provider 上报的累计用量），客户端每 5 秒 `refreshProjections` 一次续上运行中子代理的最新数字；
+- 没有子代理时不渲染；外部子代理（ACP/Codex）不在本地，不计入。
+
+安装/更新后需要**刷新页面**（客户端模块在页面启动时装配）才会出现。
+
 ## 覆盖范围
 
 - 只处理**本地 in-process 子智能体**（`subagent`、`subagent_fork`、`workflow`、`ralph` 等都会命中）；ACP / Codex / Claude Code 等外部子代理不是本地 Agent，不受影响。
