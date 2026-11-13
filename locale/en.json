@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Dual-model preset",
-    "description": "Planning, management, and review stay on the Session model; delegated execution children default to DeepSeek V4.1 Flash at high reasoning effort."
+    "title": "Subagent executor model",
+    "description": "Give delegated execution subagents a default provider, model, and reasoning effort without copying an agent preset. Explicit per-call routes are preserved."
   }
 }

@@ -1,19 +1,22 @@
 {
-  "name": "@local/dsh-dual-model-preset",
+  "name": "@local/dsh-subagent-executor-model",
   "version": "1.0.0",
   "private": true,
-  "description": "Dual-model Agent preset: planning stays on the session model, delegated execution defaults to DeepSeek V4.1 Flash at high effort.",
+  "description": "Host plugin: give delegated execution subagents a default provider/model/reasoning effort without copying an agent preset.",
   "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
   },
-  "exports": {
-    "./locale/*.json": "./locale/*.json",
-    "./icon": "./icon.svg"
-  },
   "files": [
+    "index.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
