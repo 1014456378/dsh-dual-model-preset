@@ -49,6 +49,18 @@
 | 子代理已经在目标路由 + 强度上 | 不重复记录选择 |
 | 找不到存活的父 Agent（无法确认是否显式指定） | 不处理，保持原样 |
 
+## 子代理 token 用量统计
+
+同一插件还提供一个面向模型的工具 `subagent_token_usage`（只在根会话可见，子代理的工具列表里不出现）：
+
+- 汇总当前子代理树（lead + 所有后代）每个会话的 provider 上报用量：**输入 / 缓存读 / 输出 / 总计 / 模型调用次数**；
+- 数据来自各会话持久日志里的 `assistant/message.usage`，通过 `sessionQuery.readSession()` 读取，冷会话也能统计；
+- **fork 子会话**继承的父前缀不计入（按 `inheritedEventCount` 跳过）；
+- ACP / Codex 等**外部子代理**没有本地会话，只列名字并标注；
+- 会话标题生成等内部请求没有用量记录，不计入。
+
+用法：直接问「统计各子代理的 token 用量」即可；输出是 Markdown 表格，最后一行是整棵树的合计。
+
 ## 覆盖范围
 
 - 只处理**本地 in-process 子智能体**（`subagent`、`subagent_fork`、`workflow`、`ralph` 等都会命中）；ACP / Codex / Claude Code 等外部子代理不是本地 Agent，不受影响。

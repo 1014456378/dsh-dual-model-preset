@@ -1,27 +1,22 @@
 /**
- * Host plugin: give delegated execution subagents a default model route.
+ * Host plugin with two independent parts:
  *
- * DSH exposes no preset-independent "child model" setting, and copying a
- * preset to add one drifts from upstream. This plugin instead uses two
- * supported seams: the `agent/created` event (listeners finish before queued
- * input starts) and `agent.model.select()`, which records the Session's model
- * choice for its next step. Shipped presets and tools stay untouched.
+ * 1. Executor routing (`agent/created` + `agent.model.select`): delegated
+ *    children get a default model route without copying an agent preset. The
+ *    model follows the user's Subagent model-selection setting, and
+ *    `reasoningEffort` comes from this plugin's config.
+ * 2. Token usage reporting (`subagent_token_usage` tool): sums provider-reported
+ *    usage per agent in the current subagent tree from durable session logs.
  *
- * The executor model follows the user's Subagent model-selection setting
- * (`Plugins → Subagent → Model selection`): when that setting is enabled with
- * at least one allowed route, the first allowed route wins. Otherwise the
- * plugin's own `provider`/`model` fallback applies. `reasoningEffort` always
- * comes from this plugin's config.
- *
- * A child whose creation route still equals its parent's current selection is
- * treated as "inherited" and receives the executor route. A child started with
- * an explicit route (a `subagent` call passing provider/model, or a workflow
- * script naming one) keeps that route.
+ * Shipped presets and tools stay untouched, so upstream changes keep flowing in.
  *
  * @module @local/dsh-subagent-executor-model
  */
 
 export const name = 'subagent-executor-model'
+
+/** The tool registry is required for the usage report; event work needs no service. */
+export const inject = ['tools']
 
 /** Validate the row config at activation; a bad route must fail loudly. */
 function normalize(config) {
@@ -82,8 +77,131 @@ function executorSelection(ctx, { fallback, reasoningEffort }) {
     : { provider: route.provider, model: route.model, reasoningEffort }
 }
 
+/**
+ * Sum provider-reported usage of one session log. Forked sessions inherit a
+ * parent prefix, whose usage belongs to the parent: events before
+ * `inheritedEventCount` are skipped.
+ */
+function sumUsage(events, inheritedEventCount) {
+  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalTokens: 0, calls: 0 }
+  for (const event of events ?? []) {
+    if (typeof event?.seq === 'number' && typeof inheritedEventCount === 'number' && event.seq < inheritedEventCount) continue
+    if (event?.type !== 'assistant/message') continue
+    const reported = event.data?.usage
+    if (reported === null || typeof reported !== 'object') continue
+    usage.calls += 1
+    for (const key of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'totalTokens']) {
+      const value = reported[key]
+      if (typeof value === 'number' && Number.isFinite(value)) usage[key] += value
+    }
+  }
+  return usage
+}
+
+/** Format one count with thousands separators. */
+function count(value) {
+  return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+}
+
+/** One usage report row. */
+function usageLine(name, usage, suffix = '') {
+  return `| ${name} | ${count(usage.calls)} | ${count(usage.inputTokens)} | ${count(usage.cacheReadTokens)} | ${count(usage.outputTokens)} | ${count(usage.totalTokens)} |${suffix}`
+}
+
+/** Register the usage-report tool. Root agents only: children do not need it. */
+function registerUsageTool(ctx) {
+  const definition = {
+    name: 'subagent_token_usage',
+    description:
+      'Report provider-reported token usage for every agent in the current subagent tree (the lead and all descendants). '
+      + 'Each row sums that session log\'s assistant-message usage: input, cache-read input, output, and total tokens, plus model calls. '
+      + 'Forked children exclude the parent prefix they inherit. External (out-of-process) children have no local session and are listed without counts.',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(_args, exec) {
+      const agent = exec.agent
+      if (agent === undefined) throw new Error('subagent_token_usage requires a calling agent')
+      const query = ctx.get('sessionQuery')
+      if (query === undefined) throw new Error('subagent_token_usage requires the session history service')
+      const subagents = ctx.get('subagents')
+
+      let root = agent
+      try {
+        root = subagents?.rootOf?.(agent) ?? agent
+      } catch {
+        // A caller without a managed tree reports its own session only.
+      }
+      const rootId = root.session.header.id
+      const rows = [{ name: 'lead', id: rootId, depth: 0, external: false }]
+      const notes = []
+      if (subagents !== undefined) {
+        let descendants
+        try {
+          descendants = await subagents.listDescendants(rootId, exec.signal)
+        } catch (error) {
+          descendants = undefined
+          notes.push(`- 子会话发现失败：${error instanceof Error ? error.message : String(error)}`)
+        }
+        for (const row of descendants ?? []) {
+          if (row?.kind === 'diagnostic') {
+            rows.push({ name: String(row.id).slice(0, 8), id: row.id, depth: 1, external: true, note: row.reason })
+            continue
+          }
+          rows.push({
+            name: row?.path ?? String(row?.id ?? '').slice(0, 8),
+            id: row?.id,
+            depth: typeof row?.depth === 'number' ? row.depth : 1,
+            external: false,
+          })
+        }
+      }
+
+      const lines = [
+        '| Agent | 模型调用 | 输入 | 缓存读 | 输出 | 总计 |',
+        '| --- | ---: | ---: | ---: | ---: | ---: |',
+      ]
+      const total = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, totalTokens: 0, calls: 0 }
+      let counted = 0
+      for (const row of rows) {
+        const label = `${'  '.repeat(row.depth)}${row.name}`
+        if (row.id === undefined) {
+          lines.push(`| ${label} | - | - | - | - | - |`)
+          continue
+        }
+        let usage
+        try {
+          const snapshot = await query.readSession(row.id)
+          usage = sumUsage(snapshot.events, snapshot.inheritedEventCount)
+        } catch (error) {
+          lines.push(`| ${label} | 无本地会话（外部子代理） |  |  |  |  |`)
+          continue
+        }
+        counted += 1
+        for (const key of Object.keys(total)) total[key] += usage[key]
+        lines.push(usageLine(label, usage))
+      }
+      if (counted > 1) {
+        lines.push('| --- | ---: | ---: | ---: | ---: | ---: |')
+        lines.push(usageLine('**合计**', total))
+      }
+      lines.push('')
+      lines.push('说明：用量来自各会话日志的 `assistant/message.usage`；fork 子会话继承的父前缀不计入；会话标题等内部请求不计入。')
+      for (const note of notes) lines.push(note)
+      return lines.join('\n')
+    },
+  }
+  ctx.effect(() => ctx.tools.register(definition, {
+    // Only the tree root needs this report; children keep their tool list small.
+    when: ({ agent }) => agent === undefined || agent.session.header.origin !== 'subagent',
+  }))
+}
+
 export function apply(ctx, config) {
   const normalized = normalize(config)
+  registerUsageTool(ctx)
 
   ctx.on('agent/created', ({ agent }) => {
     try {
