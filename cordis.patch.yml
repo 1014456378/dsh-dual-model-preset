@@ -8,8 +8,13 @@
     - id: subagent-executor-model
       name: '@local/dsh-subagent-executor-model'
       config:
+        # Models follow Plugins -> Subagent -> Model selection: its first
+        # allowed route wins when that setting is enabled. These values are the
+        # fallback used only while that setting is disabled or lists no route.
         provider: opencode-go
         model: deepseek-v4.1-flash
+        # Manual reasoning depth for executor children. The model currently
+        # offers low / high / max; omit to let the model's default apply.
         reasoningEffort: high
         # Optional: restrict to sessions composed from these preset ids.
         # Omit to apply to every preset.
