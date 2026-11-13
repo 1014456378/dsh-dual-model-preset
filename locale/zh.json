@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "双模（规划 + 执行）",
+    "description": "规划、管理与验收留在当前会话模型；委派给子代理的执行任务默认使用 DeepSeek V4.1 Flash（high 思考）。"
+  }
+}

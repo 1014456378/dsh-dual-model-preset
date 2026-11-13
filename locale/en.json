@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Dual-model preset",
+    "description": "Planning, management, and review stay on the Session model; delegated execution children default to DeepSeek V4.1 Flash at high reasoning effort."
+  }
+}

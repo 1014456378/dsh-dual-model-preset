@@ -1,0 +1,22 @@
+{
+  "name": "@local/dsh-dual-model-preset",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dual-model Agent preset: planning stays on the session model, delegated execution defaults to DeepSeek V4.1 Flash at high effort.",
+  "type": "module",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "exports": {
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ]
+}
