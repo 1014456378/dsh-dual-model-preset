@@ -31,7 +31,7 @@
       config:
         provider: opencode-go       # 仅当「子智能体 → 模型选择」关闭/为空时使用的回退路由
         model: deepseek-v4.1-flash
-        reasoningEffort: high       # ← 手动指定：low / high / max；删掉该行则用模型默认
+        reasoningEffort: max        # ← 手动指定：low / high / max；删掉该行则用模型默认
 ```
 
 当前执行模型 `deepseek-v4.1-flash` 支持 `low`、`high`、`max`（默认未声明，不传由网关决定）。

@@ -15,7 +15,7 @@
         model: deepseek-v4.1-flash
         # Manual reasoning depth for executor children. The model currently
         # offers low / high / max; omit to let the model's default apply.
-        reasoningEffort: high
+        reasoningEffort: max
         # Optional: restrict to sessions composed from these preset ids.
         # Omit to apply to every preset.
         # presets:
